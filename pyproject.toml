@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+main_file = "app/main.py"
+asyncio_mode = "auto"

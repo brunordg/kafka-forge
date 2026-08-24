@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "skills": {
+    "speckit-constitution": {
+      "id": "speckit-constitution",
+      "source": "dceoy/speckit-agent-skills",
+      "resolvedVersion": "a8536b37357f9ca36ceff32e67f46ea69e8e75516eca54644ac9156eb0405d93",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    },
+    "speckit-baseline": {
+      "id": "speckit-baseline",
+      "source": "dceoy/speckit-agent-skills",
+      "resolvedVersion": "2f6a12fb3b0270c9a718a59ce19d7b09567c0ba14953af01a039471bcb557c6b",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    },
+    "speckit-specify": {
+      "id": "speckit-specify",
+      "source": "dceoy/speckit-agent-skills",
+      "resolvedVersion": "469fb87de970269440368e5cce234768a346bb0a74fb75166e3664405cdf43b9",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    },
+    "speckit-clarify": {
+      "id": "speckit-clarify",
+      "source": "dceoy/speckit-agent-skills",
+      "resolvedVersion": "3f9afbb48389d08bd80f6e6bf534941572dbb101835dbb350a2c41c7710d1519",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    },
+    "user-story": {
+      "id": "user-story",
+      "source": "deanpeters/Product-Manager-Skills",
+      "resolvedVersion": "ca8f8869c1597af5f979130b9b2805c32e6e985e04cdeefe4c99a9a537360b79",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    },
+    "user-story-splitting": {
+      "id": "user-story-splitting",
+      "source": "deanpeters/Product-Manager-Skills",
+      "resolvedVersion": "dbee8a37e4f437479d2bcc103e14e4badd758c09be45268f4d7af46d204207a7",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    },
+    "speckit-plan": {
+      "id": "speckit-plan",
+      "source": "dceoy/speckit-agent-skills",
+      "resolvedVersion": "dcc8053aa4377cca5f4f2b04a68a27da1eed26203564b92351c7343d54db6eef",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    },
+    "speckit-tasks": {
+      "id": "speckit-tasks",
+      "source": "dceoy/speckit-agent-skills",
+      "resolvedVersion": "7ccbc52570135b6455b4973161757a91cf01d8630f457aa662294a7d37f9a40d",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    },
+    "speckit-checklist": {
+      "id": "speckit-checklist",
+      "source": "dceoy/speckit-agent-skills",
+      "resolvedVersion": "a5a9b2e66b5b13fe57644aa04db29a7ee03ab263bd73c0cc105c21c90eceb668",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    },
+    "speckit-analyze": {
+      "id": "speckit-analyze",
+      "source": "dceoy/speckit-agent-skills",
+      "resolvedVersion": "5afe07c73a6a0c355c2109603c869430586c29c8b3b5cae68e3d4a0379346274",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    },
+    "speckit-implement": {
+      "id": "speckit-implement",
+      "source": "dceoy/speckit-agent-skills",
+      "resolvedVersion": "22e5cd2b397b5d93a25522e28e379bb2acf95542308183552cbac6e1f67d9735",
+      "installedForHarness": "claude-code",
+      "tier": 1
+    }
+  }
+}

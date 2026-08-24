@@ -1,0 +1,6 @@
+nicegui==3.16.0
+fastapi==0.141.1
+uvicorn==0.52.4
+confluent-kafka[schema-registry]==2.15.0
+fastavro==1.12.2
+pydantic==2.13.4

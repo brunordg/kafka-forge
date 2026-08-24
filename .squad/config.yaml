@@ -1,0 +1,7 @@
+project:
+  name: kafka-forge
+  stack: unknown
+  language: Portuguese
+provider:
+  name: claude-code
+  experimental: false
