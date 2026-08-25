@@ -33,7 +33,7 @@ def publicar_mensagem_page() -> None:
         schema_select = (
             ui.select(
                 {nome: nome for nome in kafka_service.list_schema_names()},
-                label="Schema salvo",
+                label="Schema salvo (opcional)",
             )
             .mark("schema-select")
             .classes("w-full")
@@ -152,11 +152,6 @@ def publicar_mensagem_page() -> None:
         async def _publish() -> None:
             problems_list.clear()
             publish_result.clear()
-
-            if not state["schema_avsc"]:
-                status_label.text = "Selecione um arquivo .avsc antes de publicar."
-                status_label.classes(replace="text-negative")
-                return
 
             if not configuration_select.value or not topic_input.value:
                 status_label.text = "Selecione uma configuração e informe o tópico antes de publicar."

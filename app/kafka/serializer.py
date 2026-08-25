@@ -38,3 +38,16 @@ def serialize(schema_avsc: str, payload: dict, schema_id: int | None = None) -> 
         return body
 
     return _MAGIC_BYTE + schema_id.to_bytes(_SCHEMA_ID_BYTES, byteorder="big") + body
+
+
+def serialize_json(payload: dict) -> bytes:
+    """Serializa um payload sem schema Avro associado — o schema é opcional
+    ao publicar (schema serve para validar o payload, não para publicá-lo).
+    Corpo JSON UTF-8 puro, sem cabeçalho de wire."""
+    try:
+        return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    except (TypeError, ValueError) as error:
+        raise MessageSerializationError(
+            "Não foi possível serializar o payload em JSON.",
+            str(error),
+        ) from error

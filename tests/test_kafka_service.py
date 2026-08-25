@@ -300,6 +300,21 @@ def test_test_schema_registry_returns_understandable_failure(monkeypatch):
     assert result.message == "Simulação: Schema Registry inacessível"
 
 
+def test_test_schema_registry_config_tests_an_unsaved_config_directly(monkeypatch):
+    # achado: "Testar" na tela Configurações — Schema Registry ignorava o
+    # formulário e só testava o que já estava salvo — este é o caminho
+    # usado para testar o formulário sem exigir Salvar antes
+    config_manager.create_configuration(_configuration("Desenvolvimento"))
+    monkeypatch.setattr(kafka_service.registry_client, "test_connection", lambda config: None)
+
+    result = kafka_service.test_schema_registry_config(
+        "Desenvolvimento", SchemaRegistryConfig(url="http://localhost:8081")
+    )
+
+    assert result.success is True
+    assert kafka_service.get_configuration("Desenvolvimento").schema_registry is None
+
+
 def test_test_configuration_tests_only_kafka_when_no_schema_registry_is_configured(monkeypatch):
     config_manager.create_configuration(_configuration("Desenvolvimento"))
     _patch_admin_client(monkeypatch, _FakeAdminClient())
@@ -426,6 +441,21 @@ def test_publish_works_without_a_schema_registry_using_only_the_local_avsc(monke
 
     assert result.success is True
     assert producer.produce_calls[0]["topic"] == "pedido-criado"
+
+
+def test_publish_without_a_schema_publishes_the_payload_as_plain_json(monkeypatch):
+    # schema Avro é opcional ao publicar — serve para validar o payload,
+    # não é um requisito para publicar
+    config_manager.create_configuration(_configuration("Desenvolvimento"))
+    producer = _FakeProducer()
+    _patch_producer(monkeypatch, producer)
+
+    result = kafka_service.publish(
+        "Desenvolvimento", "pedido-criado", None, {"id": 1, "valor": 10.5}
+    )
+
+    assert result.success is True
+    assert producer.produce_calls[0]["value"] == b'{"id": 1, "valor": 10.5}'
 
 
 def test_publish_sends_the_key_when_informed(monkeypatch):

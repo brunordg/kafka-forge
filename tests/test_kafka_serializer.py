@@ -40,6 +40,13 @@ def test_serialize_raises_message_serialization_error_for_an_incompatible_payloa
         serializer.serialize(SIMPLE_AVSC, {"id": "nao-e-numero", "valor": 10.5})
 
 
+def test_serialize_json_returns_the_payload_as_utf8_json_bytes():
+    # schema Avro é opcional ao publicar: sem ele, o payload vira JSON puro
+    data = serializer.serialize_json({"id": 1, "valor": 10.5})
+
+    assert json.loads(data.decode("utf-8")) == {"id": 1, "valor": 10.5}
+
+
 def test_serialize_decodes_base64_bytes_fields():
     # S2 de analysis.md: campos `bytes` são representados em base64 no JSON
     avsc = '{"type": "record", "name": "Arquivo", "fields": [{"name": "conteudo", "type": "bytes"}]}'

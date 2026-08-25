@@ -28,7 +28,12 @@ def configuracoes_schema_registry_page() -> None:
     with ui.column().classes("w-full max-w-2xl gap-2"):
         config_select = environment_select.render(label="Configuração de ambiente")
 
-        url_input = ui.input("URL").mark("url-input").classes("w-full")
+        url_input = (
+            ui.input("URL")
+            .mark("url-input")
+            .props('placeholder="http://localhost:8081"')
+            .classes("w-full")
+        )
         username_input = ui.input("Usuário").mark("username-input").classes("w-full")
         password_input = ui.input("Senha", password=True).mark("password-input").classes("w-full")
 
@@ -89,6 +94,16 @@ def configuracoes_schema_registry_page() -> None:
 
         config_select.on_value_change(_handle_config_select)
 
+        def _schema_registry_from_form() -> SchemaRegistryConfig:
+            return SchemaRegistryConfig(
+                url=url_input.value,
+                username=username_input.value or None,
+                password=password_input.value or None,
+                ca_cert=state["ca_cert"],
+                client_cert=state["client_cert"],
+                client_key=state["client_key"],
+            )
+
         def _save() -> None:
             nome = config_select.value
             if not nome:
@@ -107,37 +122,33 @@ def configuracoes_schema_registry_page() -> None:
                 status_label.classes(replace="text-negative")
                 return
 
-            schema_registry = SchemaRegistryConfig(
-                url=url_input.value,
-                username=username_input.value or None,
-                password=password_input.value or None,
-                ca_cert=state["ca_cert"],
-                client_cert=state["client_cert"],
-                client_key=state["client_key"],
-            )
-            updated = configuration.model_copy(update={"schema_registry": schema_registry})
+            updated = configuration.model_copy(update={"schema_registry": _schema_registry_from_form()})
             kafka_service.update_configuration(nome, updated)
 
             status_label.text = f"Schema Registry de '{nome}' salvo com sucesso."
             status_label.classes(replace="text-positive")
 
         async def _test() -> None:
+            # Testa o que está no formulário agora, não a última configuração
+            # salva (achado: "Testar" bloqueado sem clicar em Salvar antes) —
+            # não exige Salvar primeiro.
             nome = config_select.value
             if not nome:
                 status_label.text = "Selecione uma configuração de ambiente."
                 status_label.classes(replace="text-negative")
                 return
+            if not url_input.value:
+                status_label.text = "Informe a URL do Schema Registry."
+                status_label.classes(replace="text-negative")
+                return
 
             status_label.text = "Testando Schema Registry..."
             status_label.classes(replace="")
-            try:
-                # run.io_bound evita bloquear o servidor NiceGUI durante os
-                # até 10s do timeout de teste (decisão Q2).
-                result = await run.io_bound(kafka_service.test_schema_registry, nome)
-            except ConfigurationNotFoundError as error:
-                status_label.text = error.friendly_message
-                status_label.classes(replace="text-negative")
-                return
+            # run.io_bound evita bloquear o servidor NiceGUI durante os até
+            # 10s do timeout de teste (decisão Q2).
+            result = await run.io_bound(
+                kafka_service.test_schema_registry_config, nome, _schema_registry_from_form()
+            )
 
             status_label.text = result.message
             status_label.classes(replace="text-positive" if result.success else "text-negative")

@@ -24,19 +24,22 @@ def publish_message(request: MessagePublishRequest) -> MessagePublishResponse:
     tópico/partição/offset (sucesso) ou um erro compreensível (falha) —
     mesmo `services/kafka_service.py` usado pela UI (NFR-006, SC-005).
     Configuração ou schema inexistentes (cenário 3 de US-004a) viram 404,
-    identificando qual dos dois não foi encontrado."""
-    try:
-        loaded_schema = kafka_service.get_named_schema(request.schema_)
-    except SchemaNotFoundError as error:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=error.friendly_message
-        ) from error
+    identificando qual dos dois não foi encontrado. `schema` é opcional:
+    sem ele, o payload é publicado como JSON puro, sem validação Avro."""
+    schema_content = None
+    if request.schema_ is not None:
+        try:
+            schema_content = kafka_service.get_named_schema(request.schema_).raw_content
+        except SchemaNotFoundError as error:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=error.friendly_message
+            ) from error
 
     try:
         result = kafka_service.publish(
             request.configuration,
             request.topic,
-            loaded_schema.raw_content,
+            schema_content,
             request.payload,
             key=request.key,
         )

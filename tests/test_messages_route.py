@@ -156,6 +156,29 @@ def test_publish_route_returns_success_with_partition_and_offset(api_client, mon
     assert body["offset"] == 12345
 
 
+def test_publish_route_publishes_without_a_schema_field(api_client, monkeypatch):
+    # schema é opcional no contrato de POST /api/v1/messages: sem ele, o
+    # payload é publicado como JSON puro, sem exigir um schema já salvo
+    _create_configuration()
+    monkeypatch.setattr(
+        kafka_service.kafka_connection, "build_producer", lambda configuration: _FakeProducer()
+    )
+
+    response = api_client.post(
+        "/api/v1/messages",
+        json={
+            "configuration": "Desenvolvimento",
+            "topic": "pedido-criado",
+            "payload": {"id": 1, "valor": 10.5},
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["topic"] == "pedido-criado"
+
+
 def test_publish_route_rejects_an_incompatible_payload_without_touching_kafka(api_client):
     # cenário 2 do Acceptance Scenario de US-004a
     _create_configuration()

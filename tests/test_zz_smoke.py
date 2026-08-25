@@ -145,6 +145,66 @@ async def test_publicar_mensagem_publish_flow(user, monkeypatch):
     await user.should_see(marker="publish-offset")
 
 
+async def test_publicar_mensagem_publish_flow_without_a_schema(user, monkeypatch):
+    # schema Avro é opcional ao publicar: sem selecionar/enviar um .avsc, a
+    # mensagem ainda deve ser publicada como JSON puro
+    kafka_service.create_configuration(
+        EnvironmentConfiguration(
+            nome="Desenvolvimento",
+            kafka=KafkaConfig(bootstrap_servers="localhost:9092", security_protocol=SecurityProtocol.PLAINTEXT),
+        )
+    )
+
+    class _FakeMessage:
+        def partition(self):
+            return 2
+
+        def offset(self):
+            return 12345
+
+    class _FakeProducer:
+        def produce(self, topic, value=None, key=None, on_delivery=None):
+            on_delivery(None, _FakeMessage())
+
+        def flush(self, timeout=None):
+            return 0
+
+    monkeypatch.setattr(kafka_service.kafka_connection, "build_producer", lambda configuration: _FakeProducer())
+
+    await user.open("/publicar-mensagem")
+    _element(user, "configuration-select").set_value("Desenvolvimento")
+    _element(user, "topic-input").value = "pedido-criado"
+    _element(user, "payload-editor").value = '{"id": 1}'
+
+    user.find(marker="publish-button").click()
+
+    await user.should_see("Mensagem publicada com sucesso.")
+    await user.should_see(marker="publish-partition")
+    await user.should_see(marker="publish-offset")
+
+
+async def test_configuracoes_schema_registry_test_without_saving_first(user, monkeypatch):
+    # achado do usuário: "Testar Schema Registry" mostrava "Nenhum Schema
+    # Registry configurado" mesmo com a URL preenchida, porque só testava o
+    # que já estava salvo — agora testa o formulário atual
+    kafka_service.create_configuration(
+        EnvironmentConfiguration(
+            nome="Desenvolvimento",
+            kafka=KafkaConfig(bootstrap_servers="localhost:9092", security_protocol=SecurityProtocol.PLAINTEXT),
+        )
+    )
+    monkeypatch.setattr(kafka_service.registry_client, "test_connection", lambda config: None)
+
+    await user.open("/configuracoes/schema-registry")
+    _element(user, "configuration-select").set_value("Desenvolvimento")
+    _element(user, "url-input").value = "http://localhost:8081"
+
+    user.find(marker="test-schema-registry-button").click()
+
+    await user.should_see("Schema Registry acessível.")
+    assert kafka_service.get_configuration("Desenvolvimento").schema_registry is None
+
+
 async def test_configuracoes_schema_registry_save_and_test(user, monkeypatch):
     kafka_service.create_configuration(
         EnvironmentConfiguration(

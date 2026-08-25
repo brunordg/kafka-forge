@@ -198,26 +198,19 @@ def test_connection(nome_configuracao: str) -> ConnectionTestResult:
     )
 
 
-def test_schema_registry(nome_configuracao: str) -> ConnectionTestResult:
-    """Testa a acessibilidade do Schema Registry da configuração indicada,
-    sem registrar nada (US-005a, NFR-002), sobre `registry/client.py`
-    (TASK-045). Quando o ambiente não tem Schema Registry configurado
-    (FR-007), retorna falha com uma mensagem que deixa isso explícito, em
-    vez de tentar testar algo que não existe."""
-    configuration = _get_configuration_snapshot(nome_configuracao)
+def test_schema_registry_config(
+    nome_configuracao: str, schema_registry: SchemaRegistryConfig
+) -> ConnectionTestResult:
+    """Testa a acessibilidade de uma `SchemaRegistryConfig` diretamente, sem
+    exigir que ela já esteja salva na Configuração de Ambiente (usada pela
+    tela Configurações → Schema Registry para testar o que está no
+    formulário — URL/credenciais/certificados — mesmo antes de clicar em
+    Salvar). `nome_configuracao` é usado apenas para identificar o Registro
+    de Operação (US-005a, NFR-002), sobre `registry/client.py` (TASK-045)."""
     started_at = time.monotonic()
 
-    if configuration.schema_registry is None:
-        return _record_connection_test(
-            nome_configuracao,
-            started_at,
-            success=False,
-            message="Nenhum Schema Registry configurado para este ambiente.",
-            tipo_operacao=operation_log.OperationType.TESTE_SCHEMA_REGISTRY,
-        )
-
     try:
-        registry_client.test_connection(configuration.schema_registry)
+        registry_client.test_connection(schema_registry)
     except SchemaRegistryError as error:
         return _record_connection_test(
             nome_configuracao,
@@ -235,6 +228,25 @@ def test_schema_registry(nome_configuracao: str) -> ConnectionTestResult:
         message="Schema Registry acessível.",
         tipo_operacao=operation_log.OperationType.TESTE_SCHEMA_REGISTRY,
     )
+
+
+def test_schema_registry(nome_configuracao: str) -> ConnectionTestResult:
+    """Testa a acessibilidade do Schema Registry já salvo na configuração
+    indicada (US-005a, NFR-002). Quando o ambiente não tem Schema Registry
+    configurado (FR-007), retorna falha com uma mensagem que deixa isso
+    explícito, em vez de tentar testar algo que não existe."""
+    configuration = _get_configuration_snapshot(nome_configuracao)
+
+    if configuration.schema_registry is None:
+        return _record_connection_test(
+            nome_configuracao,
+            time.monotonic(),
+            success=False,
+            message="Nenhum Schema Registry configurado para este ambiente.",
+            tipo_operacao=operation_log.OperationType.TESTE_SCHEMA_REGISTRY,
+        )
+
+    return test_schema_registry_config(nome_configuracao, configuration.schema_registry)
 
 
 def test_configuration(nome_configuracao: str) -> ConfigurationTestResult:
@@ -475,7 +487,7 @@ def _record_publish(
 def publish(
     nome_configuracao: str,
     topic: str,
-    schema_avsc: str,
+    schema_avsc: str | None,
     payload: dict,
     key: str | None = None,
 ) -> PublishResult:
@@ -487,7 +499,10 @@ def publish(
     bloqueado antes de qualquer tentativa de publicação (cenário 3 de
     US-003b); funciona apenas com o `.avsc` local, sem exigir Schema
     Registry (cenário 4, FR-007) — o uso do Schema Registry na serialização
-    é adicionado por TASK-049, sem mudar esta assinatura."""
+    é adicionado por TASK-049, sem mudar esta assinatura. `schema_avsc` é
+    opcional: sem ele, o payload é publicado como JSON puro, sem validação
+    nem Schema Registry — o schema Avro é uma ferramenta de validação, não
+    um requisito para publicar."""
     started_at = time.monotonic()
     configuration = _get_configuration_snapshot(nome_configuracao)
 
@@ -505,61 +520,72 @@ def publish(
             technical_detail=technical_detail,
         )
 
-    try:
-        loaded_schema = schema_loader.load_schema(schema_avsc)
-    except AvroSchemaError as error:
-        return _failure(error.friendly_message, technical_detail=error.technical_detail)
-
-    problems = avro_validator.validate_payload(schema_avsc, payload)
-    if problems:
-        technical_detail = "; ".join(
-            f"{problem.campo}: esperado '{problem.tipo_esperado}', "
-            f"recebido '{problem.tipo_recebido}'"
-            for problem in problems
-        )
-        return _failure(
-            "Payload inválido: verifique os campos apontados.",
-            schema_nome=loaded_schema.nome,
-            technical_detail=technical_detail,
-        )
-
+    loaded_schema = None
     schema_id = None
-    if configuration.schema_registry is not None:
-        # FR-015/TASK-049: usa o schema id do Schema Registry na
-        # serialização quando configurado — `register_or_reuse_schema`
-        # já reaproveita o id existente para um schema idêntico
-        # (SC-008), nunca criando uma versão duplicada.
+    serialized: bytes
+
+    if schema_avsc:
         try:
-            schema_id = registry_client.register_or_reuse_schema(
-                configuration.schema_registry, loaded_schema.nome, schema_avsc
+            loaded_schema = schema_loader.load_schema(schema_avsc)
+        except AvroSchemaError as error:
+            return _failure(error.friendly_message, technical_detail=error.technical_detail)
+
+        problems = avro_validator.validate_payload(schema_avsc, payload)
+        if problems:
+            technical_detail = "; ".join(
+                f"{problem.campo}: esperado '{problem.tipo_esperado}', "
+                f"recebido '{problem.tipo_recebido}'"
+                for problem in problems
             )
-        except SchemaRegistryError as error:
+            return _failure(
+                "Payload inválido: verifique os campos apontados.",
+                schema_nome=loaded_schema.nome,
+                technical_detail=technical_detail,
+            )
+
+        if configuration.schema_registry is not None:
+            # FR-015/TASK-049: usa o schema id do Schema Registry na
+            # serialização quando configurado — `register_or_reuse_schema`
+            # já reaproveita o id existente para um schema idêntico
+            # (SC-008), nunca criando uma versão duplicada.
+            try:
+                schema_id = registry_client.register_or_reuse_schema(
+                    configuration.schema_registry, loaded_schema.nome, schema_avsc
+                )
+            except SchemaRegistryError as error:
+                return _failure(
+                    error.friendly_message,
+                    schema_nome=loaded_schema.nome,
+                    technical_detail=error.technical_detail,
+                )
+
+        try:
+            serialized = kafka_serializer.serialize(schema_avsc, payload, schema_id=schema_id)
+        except MessageSerializationError as error:
             return _failure(
                 error.friendly_message,
                 schema_nome=loaded_schema.nome,
                 technical_detail=error.technical_detail,
             )
+    else:
+        try:
+            serialized = kafka_serializer.serialize_json(payload)
+        except MessageSerializationError as error:
+            return _failure(error.friendly_message, technical_detail=error.technical_detail)
 
-    try:
-        serialized = kafka_serializer.serialize(schema_avsc, payload, schema_id=schema_id)
-    except MessageSerializationError as error:
-        return _failure(
-            error.friendly_message,
-            schema_nome=loaded_schema.nome,
-            technical_detail=error.technical_detail,
-        )
+    schema_nome = loaded_schema.nome if loaded_schema else None
 
     try:
         partition, offset = kafka_producer.produce(configuration, topic, serialized, key=key)
     except (KafkaAuthenticationError, MessagePublishError) as error:
         return _failure(
             error.friendly_message,
-            schema_nome=loaded_schema.nome,
+            schema_nome=schema_nome,
             technical_detail=error.technical_detail,
         )
     except KafkaException as error:
         message, technical_detail = _describe_kafka_error(error.args[0])
-        return _failure(message, schema_nome=loaded_schema.nome, technical_detail=technical_detail)
+        return _failure(message, schema_nome=schema_nome, technical_detail=technical_detail)
 
     return _record_publish(
         nome_configuracao,
@@ -567,7 +593,7 @@ def publish(
         success=True,
         message="Mensagem publicada com sucesso.",
         topic=topic,
-        schema_nome=loaded_schema.nome,
+        schema_nome=schema_nome,
         partition=partition,
         offset=offset,
         key=key,

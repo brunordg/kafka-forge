@@ -37,13 +37,15 @@ class MessagePublishRequest(BaseModel):
     `POST /api/v1/schema/validate`+persistência (TASK-034b) ou pela tela
     Schemas Avro — não o conteúdo `.avsc` bruto. Campo Python `schema_`
     com alias `schema` pelo mesmo motivo de `services/operation_log.py`:
-    evita colidir com atributos de `BaseModel`."""
+    evita colidir com atributos de `BaseModel`. `schema` é opcional: o
+    schema Avro serve para validar o payload, não é um requisito para
+    publicar — sem ele, o payload é publicado como JSON puro."""
 
     model_config = ConfigDict(populate_by_name=True)
 
     configuration: str
     topic: str
-    schema_: str = Field(alias="schema")
+    schema_: str | None = Field(default=None, alias="schema")
     key: str | None = None
     payload: dict
 
@@ -63,9 +65,9 @@ class MessagePublishRequest(BaseModel):
 
     @field_validator("schema_")
     @classmethod
-    def _schema_obrigatorio(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("Informe o nome do schema Avro já carregado.")
+    def _schema_em_branco_vira_none(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            return None
         return value
 
 
