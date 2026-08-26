@@ -102,3 +102,37 @@ class ConfigurationNotFoundError(KafkaForgeError):
 
 class SchemaNotFoundError(KafkaForgeError):
     pass
+
+
+class KnowledgeBaseError(KafkaForgeError):
+    """Base de toda exceção do módulo `knowledge_base/` (RAG). Análoga a
+    `KafkaForgeError` para o domínio Kafka: mensagens amigáveis para
+    `ui/`/`api/`, detalhe técnico para logs."""
+
+
+class KnowledgeBaseDisabledError(KnowledgeBaseError):
+    pass
+
+
+class DocumentNotFoundError(KnowledgeBaseError):
+    pass
+
+
+class UnsupportedDocumentTypeError(KnowledgeBaseError):
+    pass
+
+
+class DocumentTooLargeError(KnowledgeBaseError):
+    pass
+
+
+class EmbeddingProviderError(KnowledgeBaseError):
+    pass
+
+
+class LLMProviderError(KnowledgeBaseError):
+    pass
+
+
+class LLMNotConfiguredError(LLMProviderError):
+    pass
