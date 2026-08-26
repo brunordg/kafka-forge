@@ -15,9 +15,11 @@ async def _read_upload_as_text(event: events.UploadEventArguments) -> str:
 
 @ui.page(ROUTE)
 def publicar_mensagem_page() -> None:
-    layout.render_menu()
+    layout.render_menu(ROUTE)
 
-    ui.label("Publicar Mensagem").classes("text-2xl font-bold")
+    with ui.row().classes("items-center gap-2"):
+        ui.icon("send").classes("text-primary text-3xl")
+        ui.label("Publicar Mensagem").classes("text-2xl font-bold")
 
     # Estado por conexão de cliente (closure da função da página) — o
     # schema selecionado (conteúdo `.avsc` e campos formatados) não tem um
@@ -25,33 +27,63 @@ def publicar_mensagem_page() -> None:
     # `configuracoes_kafka.py`/`schemas_avro.py`.
     state: dict[str, object] = {"schema_avsc": None, "schema_fields": None, "payload": {}}
 
-    with ui.column().classes("w-full max-w-2xl gap-2"):
-        configuration_select = environment_select.render()
-        topic_input = ui.input("Tópico").mark("topic-input").classes("w-full")
-        key_input = ui.input("Chave (opcional)").mark("key-input").classes("w-full")
-
-        schema_select = (
-            ui.select(
-                {nome: nome for nome in kafka_service.list_schema_names()},
-                label="Schema salvo (opcional)",
+    with ui.column().classes("w-full max-w-3xl gap-4"):
+        with ui.card().classes("w-full gap-2"):
+            configuration_select = environment_select.render()
+            topic_input = (
+                ui.input("Tópico").props("outlined dense").classes("w-full").mark("topic-input")
             )
-            .mark("schema-select")
-            .classes("w-full")
-        )
+            key_input = (
+                ui.input("Chave (opcional)")
+                .props("outlined dense")
+                .classes("w-full")
+                .mark("key-input")
+            )
 
         status_label = ui.label().mark("status-label")
-        form_container = ui.column().mark("schema-form").classes("w-full gap-1")
 
-        # FR-011: editor de texto no formato JSON — mecanismo mínimo
-        # funcional. FR-012: o formulário auto-gerado acima (TASK-030b) é
-        # uma alternativa que escreve no mesmo editor — os dois produzem o
-        # mesmo payload, e o editor continua disponível e funcional.
-        payload_editor = (
-            ui.textarea(label="Payload (JSON)")
-            .mark("payload-editor")
-            .props("rows=10")
-            .classes("w-full font-mono")
-        )
+        with ui.card().classes("w-full gap-2"):
+            ui.label("Schema (opcional)").classes("text-base font-medium")
+            schema_select = (
+                ui.select(
+                    {nome: nome for nome in kafka_service.list_schema_names()},
+                    label="Schema salvo (opcional)",
+                )
+                .props("outlined dense")
+                .classes("w-full")
+                .mark("schema-select")
+            )
+            ui.upload(
+                label="Selecionar arquivo .avsc",
+                on_upload=lambda event: _handle_schema_upload(event),
+                auto_upload=True,
+            ).props("outlined").classes("w-full").mark("schema-upload")
+
+            form_container = ui.column().mark("schema-form").classes("w-full gap-1")
+
+        with ui.card().classes("w-full gap-2"):
+            ui.label("Payload").classes("text-base font-medium")
+            # FR-011: editor de texto no formato JSON — mecanismo mínimo
+            # funcional. FR-012: o formulário auto-gerado acima (TASK-030b) é
+            # uma alternativa que escreve no mesmo editor — os dois produzem o
+            # mesmo payload, e o editor continua disponível e funcional.
+            payload_editor = (
+                ui.textarea(label="Payload (JSON)")
+                .mark("payload-editor")
+                .props("rows=10 outlined")
+                .classes("w-full font-mono")
+            )
+
+            problems_list = ui.column().mark("validation-problems").classes("gap-0 w-full")
+            publish_result = ui.column().mark("publish-result").classes("gap-0 w-full")
+
+            with ui.row():
+                ui.button("Validar", icon="fact_check", on_click=lambda: _validate()).props(
+                    "outline"
+                ).mark("validate-button")
+                ui.button("Publicar", icon="send", on_click=lambda: _publish()).mark(
+                    "publish-button"
+                )
 
         def _on_form_change(payload: dict) -> None:
             payload_editor.value = json.dumps(payload, ensure_ascii=False, indent=2)
@@ -103,15 +135,6 @@ def publicar_mensagem_page() -> None:
             _set_schema(result.nome, result.raw_content, result.fields)
             _refresh_schema_options(select_nome=result.nome)
             ui.notify(f"Schema carregado: {event.file.name}")
-
-        ui.upload(
-            label="Selecionar arquivo .avsc",
-            on_upload=_handle_schema_upload,
-            auto_upload=True,
-        ).mark("schema-upload").classes("w-full")
-
-        problems_list = ui.column().mark("validation-problems").classes("gap-0")
-        publish_result = ui.column().mark("publish-result").classes("gap-0")
 
         def _current_payload() -> dict:
             return json.loads(payload_editor.value or "{}")
@@ -193,7 +216,3 @@ def publicar_mensagem_page() -> None:
                     ui.label(f"Tópico: {result.topic}").mark("publish-topic")
                     ui.label(f"Partição: {result.partition}").mark("publish-partition")
                     ui.label(f"Offset: {result.offset}").mark("publish-offset")
-
-        with ui.row():
-            ui.button("Validar", on_click=_validate).mark("validate-button")
-            ui.button("Publicar", on_click=_publish).mark("publish-button")

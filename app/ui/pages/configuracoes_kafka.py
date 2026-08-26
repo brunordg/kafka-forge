@@ -25,7 +25,7 @@ async def _read_upload_as_text(event: events.UploadEventArguments) -> str:
 
 @ui.page(ROUTE)
 def configuracoes_kafka_page() -> None:
-    layout.render_menu()
+    layout.render_menu(ROUTE)
 
     # Estado por conexão de cliente (closure da função da página, não uma
     # variável de módulo) — cada aba/navegador que abre esta página tem o
@@ -38,17 +38,25 @@ def configuracoes_kafka_page() -> None:
     }
     existing_schema_registry: dict[str, SchemaRegistryConfig | None] = {"value": None}
 
-    ui.label("Configurações — Kafka").classes("text-2xl font-bold")
+    with ui.row().classes("items-center gap-2"):
+        ui.icon("dns").classes("text-primary text-3xl")
+        ui.label("Configurações — Kafka").classes("text-2xl font-bold")
 
-    with ui.row().classes("w-full items-start gap-8"):
-        with ui.column().classes("w-96 gap-2"):
-            form_title = ui.label("Nova configuração").classes("text-lg")
+    with ui.row().classes("w-full items-start gap-6 flex-wrap"):
+        with ui.card().classes("w-96 gap-2"):
+            form_title = ui.label("Nova configuração").classes("text-lg font-medium")
 
-            nome_input = ui.input("Nome da configuração").mark("nome-input").classes("w-full")
+            nome_input = (
+                ui.input("Nome da configuração")
+                .props("outlined dense")
+                .classes("w-full")
+                .mark("nome-input")
+            )
             bootstrap_servers_input = (
                 ui.input("Endereço dos brokers (bootstrap_servers)")
-                .mark("bootstrap-servers-input")
+                .props("outlined dense")
                 .classes("w-full")
+                .mark("bootstrap-servers-input")
             )
             security_protocol_select = (
                 ui.select(
@@ -56,22 +64,30 @@ def configuracoes_kafka_page() -> None:
                     label="Protocolo de segurança",
                     value=SecurityProtocol.PLAINTEXT.value,
                 )
-                .mark("security-protocol-select")
+                .props("outlined dense")
                 .classes("w-full")
+                .mark("security-protocol-select")
             )
             sasl_mechanism_select = (
                 ui.select(_SASL_MECHANISM_OPTIONS, label="Mecanismo SASL", value="")
-                .mark("sasl-mechanism-select")
+                .props("outlined dense")
                 .classes("w-full")
+                .mark("sasl-mechanism-select")
             )
-            username_input = ui.input("Usuário").mark("username-input").classes("w-full")
+            username_input = (
+                ui.input("Usuário").props("outlined dense").classes("w-full").mark("username-input")
+            )
             password_input = (
-                ui.input("Senha", password=True).mark("password-input").classes("w-full")
+                ui.input("Senha", password=True)
+                .props("outlined dense")
+                .classes("w-full")
+                .mark("password-input")
             )
             client_key_password_input = (
                 ui.input("Senha da chave privada", password=True)
-                .mark("client-key-password-input")
+                .props("outlined dense")
                 .classes("w-full")
+                .mark("client-key-password-input")
             )
 
             def _make_upload_handler(field: str, rotulo: str):
@@ -85,17 +101,17 @@ def configuracoes_kafka_page() -> None:
                 label="Certificado da autoridade (CA)",
                 on_upload=_make_upload_handler("ca_cert", "Certificado CA"),
                 auto_upload=True,
-            ).mark("ca-cert-upload").classes("w-full")
+            ).props("outlined").classes("w-full").mark("ca-cert-upload")
             ui.upload(
                 label="Certificado do cliente",
                 on_upload=_make_upload_handler("client_cert", "Certificado do cliente"),
                 auto_upload=True,
-            ).mark("client-cert-upload").classes("w-full")
+            ).props("outlined").classes("w-full").mark("client-cert-upload")
             ui.upload(
                 label="Chave privada do cliente",
                 on_upload=_make_upload_handler("client_key", "Chave privada do cliente"),
                 auto_upload=True,
-            ).mark("client-key-upload").classes("w-full")
+            ).props("outlined").classes("w-full").mark("client-key-upload")
 
             status_label = ui.label().mark("status-label")
 
@@ -159,12 +175,14 @@ def configuracoes_kafka_page() -> None:
                     status_label.classes(replace="text-negative")
 
             with ui.row():
-                ui.button("Salvar", on_click=_save).mark("save-button")
-                ui.button("Nova configuração", on_click=_clear_form).mark("clear-button")
+                ui.button("Salvar", icon="save", on_click=_save).mark("save-button")
+                ui.button(
+                    "Nova configuração", icon="add", on_click=_clear_form
+                ).props("outline").mark("clear-button")
 
-        with ui.column().classes("flex-1 gap-2"):
-            ui.label("Configurações salvas").classes("text-lg")
-            saved_list = ui.column().mark("saved-configurations-list").classes("w-full gap-1")
+        with ui.column().classes("flex-1 min-w-[20rem] gap-2"):
+            ui.label("Configurações salvas").classes("text-lg font-medium")
+            saved_list = ui.column().mark("saved-configurations-list").classes("w-full gap-2")
 
             def _load_into_form(configuration: EnvironmentConfiguration) -> None:
                 state["editing_nome"] = configuration.nome
@@ -196,7 +214,7 @@ def configuracoes_kafka_page() -> None:
                 with ui.row():
                     ui.button(
                         "Cancelar", on_click=delete_dialog.close
-                    ).mark("cancel-delete-button")
+                    ).props("flat").mark("cancel-delete-button")
 
                     def _confirm_delete() -> None:
                         nome = delete_pending["nome"]
@@ -215,7 +233,9 @@ def configuracoes_kafka_page() -> None:
                             status_label.classes(replace="text-negative")
                             _refresh_list()
 
-                    ui.button("Remover", on_click=_confirm_delete).mark("confirm-delete-button")
+                    ui.button("Remover", color="negative", on_click=_confirm_delete).mark(
+                        "confirm-delete-button"
+                    )
 
             def _ask_delete_confirmation(nome: str) -> None:
                 delete_pending["nome"] = nome
@@ -247,25 +267,35 @@ def configuracoes_kafka_page() -> None:
                 configurations = kafka_service.list_configurations()
                 with saved_list:
                     if not configurations:
-                        ui.label("Nenhuma configuração salva ainda.").classes("text-grey")
+                        with ui.card().classes("w-full items-center py-6"):
+                            ui.icon("inbox").classes("text-3xl text-slate-300")
+                            ui.label("Nenhuma configuração salva ainda.").classes("text-slate-400")
                     for configuration in configurations:
-                        with ui.row().classes("items-center gap-2").mark(
-                            f"saved-configuration-{configuration.nome}"
-                        ):
-                            ui.label(
-                                f"{configuration.nome} — {configuration.kafka.bootstrap_servers}"
-                            )
-                            ui.button(
-                                "Editar",
-                                on_click=lambda c=configuration: _load_into_form(c),
-                            ).mark(f"edit-button-{configuration.nome}")
-                            ui.button(
-                                "Testar conexão",
-                                on_click=_make_test_connection_handler(configuration.nome),
-                            ).mark(f"test-connection-button-{configuration.nome}")
-                            ui.button(
-                                "Remover",
-                                on_click=lambda c=configuration: _ask_delete_confirmation(c.nome),
-                            ).mark(f"delete-button-{configuration.nome}")
+                        with ui.card().classes("w-full"):
+                            with ui.row().classes("items-center gap-2 w-full").mark(
+                                f"saved-configuration-{configuration.nome}"
+                            ):
+                                ui.icon("dns").classes("text-primary")
+                                ui.label(
+                                    f"{configuration.nome} — {configuration.kafka.bootstrap_servers}"
+                                ).classes("font-medium flex-1")
+                                ui.button(
+                                    "Editar",
+                                    icon="edit",
+                                    on_click=lambda c=configuration: _load_into_form(c),
+                                ).props("flat dense").mark(f"edit-button-{configuration.nome}")
+                                ui.button(
+                                    "Testar conexão",
+                                    icon="wifi_tethering",
+                                    on_click=_make_test_connection_handler(configuration.nome),
+                                ).props("flat dense").mark(
+                                    f"test-connection-button-{configuration.nome}"
+                                )
+                                ui.button(
+                                    "Remover",
+                                    icon="delete",
+                                    color="negative",
+                                    on_click=lambda c=configuration: _ask_delete_confirmation(c.nome),
+                                ).props("flat dense").mark(f"delete-button-{configuration.nome}")
 
     _refresh_list()

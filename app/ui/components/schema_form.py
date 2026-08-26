@@ -66,15 +66,15 @@ def render(fields: list[dict], payload: dict, on_change: Callable[[dict], None])
                 payload[nome] = caster(event.value) if event.value is not None else None
                 on_change(payload)
 
-            ui.number(nome, value=valor_atual, on_change=_handle_number).mark(
-                f"schema-form-field-{nome}"
-            )
+            ui.number(nome, value=valor_atual, on_change=_handle_number).props(
+                "outlined dense"
+            ).classes("w-full").mark(f"schema-form-field-{nome}")
             continue
 
         def _handle_text(event, nome=nome) -> None:
             payload[nome] = event.value
             on_change(payload)
 
-        ui.input(nome, value=str(valor_atual) if valor_atual is not None else "", on_change=_handle_text).mark(
-            f"schema-form-field-{nome}"
-        )
+        ui.input(
+            nome, value=str(valor_atual) if valor_atual is not None else "", on_change=_handle_text
+        ).props("outlined dense").classes("w-full").mark(f"schema-form-field-{nome}")

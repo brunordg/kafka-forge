@@ -16,17 +16,28 @@ def logs_page() -> None:
     tópico, schema, resultado e duração — com filtro por tipo e por
     resultado (TASK-056). O detalhe técnico do erro (SC-007) fica
     disponível em cada linha com falha."""
-    layout.render_menu()
+    layout.render_menu(ROUTE)
 
-    ui.label("Logs").classes("text-2xl font-bold")
+    with ui.row().classes("items-center gap-2"):
+        ui.icon("history").classes("text-primary text-3xl")
+        ui.label("Logs").classes("text-2xl font-bold")
 
-    with ui.row().classes("items-end gap-2"):
-        tipo_select = ui.select(_TIPO_OPTIONS, label="Tipo de operação", value="").mark("tipo-select")
-        resultado_select = ui.select(_RESULTADO_OPTIONS, label="Resultado", value="").mark(
-            "resultado-select"
-        )
+    with ui.card().classes("w-full"):
+        with ui.row().classes("items-end gap-2"):
+            tipo_select = (
+                ui.select(_TIPO_OPTIONS, label="Tipo de operação", value="")
+                .props("outlined dense")
+                .classes("w-56")
+                .mark("tipo-select")
+            )
+            resultado_select = (
+                ui.select(_RESULTADO_OPTIONS, label="Resultado", value="")
+                .props("outlined dense")
+                .classes("w-56")
+                .mark("resultado-select")
+            )
 
-    rows_container = ui.column().mark("logs-table").classes("w-full gap-1")
+    rows_container = ui.column().mark("logs-table").classes("w-full gap-2")
 
     def _refresh() -> None:
         rows_container.clear()
@@ -36,21 +47,36 @@ def logs_page() -> None:
 
         with rows_container:
             if not records:
-                ui.label("Nenhuma operação registrada ainda.").classes("text-grey").mark(
-                    "logs-empty"
-                )
+                with ui.card().classes("w-full items-center py-6"):
+                    ui.icon("inbox").classes("text-3xl text-slate-300")
+                    ui.label("Nenhuma operação registrada ainda.").classes("text-slate-400").mark(
+                        "logs-empty"
+                    )
             for index, record in enumerate(records):
-                with ui.row().classes("items-center gap-3").mark(f"log-row-{index}"):
-                    ui.label(record.timestamp.isoformat()).mark(f"log-timestamp-{index}")
-                    ui.label(record.tipo_operacao.value).mark(f"log-tipo-{index}")
-                    ui.label(record.topic or "-").mark(f"log-topic-{index}")
-                    ui.label(record.schema_ or "-").mark(f"log-schema-{index}")
-                    ui.label(record.resultado.value).classes(
-                        "text-positive"
-                        if record.resultado is OperationResult.SUCESSO
-                        else "text-negative"
-                    ).mark(f"log-resultado-{index}")
-                    ui.label(f"{record.duracao_ms} ms").mark(f"log-duracao-{index}")
+                sucesso = record.resultado is OperationResult.SUCESSO
+                with ui.card().classes("w-full py-2 px-4"):
+                    with ui.row().classes("items-center gap-3 w-full").mark(f"log-row-{index}"):
+                        ui.icon("check_circle" if sucesso else "cancel").classes(
+                            "text-positive" if sucesso else "text-negative"
+                        )
+                        ui.label(record.timestamp.isoformat()).classes(
+                            "text-slate-400 text-sm w-44"
+                        ).mark(f"log-timestamp-{index}")
+                        ui.badge(record.tipo_operacao.value, color="secondary").mark(
+                            f"log-tipo-{index}"
+                        )
+                        ui.label(record.topic or "-").classes("font-medium").mark(
+                            f"log-topic-{index}"
+                        )
+                        ui.label(record.schema_ or "-").classes("text-slate-500").mark(
+                            f"log-schema-{index}"
+                        )
+                        ui.label(record.resultado.value).classes(
+                            "text-positive font-medium" if sucesso else "text-negative font-medium"
+                        ).mark(f"log-resultado-{index}")
+                        ui.label(f"{record.duracao_ms} ms").classes(
+                            "text-slate-400 text-sm ml-auto"
+                        ).mark(f"log-duracao-{index}")
                     if record.erro_tecnico:
                         ui.label(record.erro_tecnico).classes("text-grey text-sm").mark(
                             f"log-erro-{index}"

@@ -8,4 +8,9 @@ def render(*, label: str = "Configuração") -> ui.select:
     — usado pela tela Publicar Mensagem; evita duplicar a lógica de listar
     configurações salvas em cada tela que precisa escolher uma."""
     configuracoes = {c.nome: c.nome for c in kafka_service.list_configurations()}
-    return ui.select(configuracoes, label=label).mark("configuration-select").classes("w-full")
+    return (
+        ui.select(configuracoes, label=label)
+        .props("outlined dense")
+        .classes("w-full")
+        .mark("configuration-select")
+    )

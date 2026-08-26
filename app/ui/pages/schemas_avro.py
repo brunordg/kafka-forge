@@ -13,14 +13,61 @@ async def _read_upload_as_text(event: events.UploadEventArguments) -> str:
 
 @ui.page(ROUTE)
 def schemas_avro_page() -> None:
-    layout.render_menu()
+    layout.render_menu(ROUTE)
 
-    ui.label("Schemas Avro").classes("text-2xl font-bold")
+    with ui.row().classes("items-center gap-2"):
+        ui.icon("description").classes("text-primary text-3xl")
+        ui.label("Schemas Avro").classes("text-2xl font-bold")
 
     status_label = ui.label().mark("status-label")
 
-    ui.label("Schemas carregados").classes("text-lg")
-    saved_schemas_list = ui.row().mark("saved-schemas-list").classes("gap-2")
+    with ui.card().classes("w-full gap-3"):
+        ui.upload(
+            label="Selecionar arquivo .avsc",
+            on_upload=lambda event: _handle_upload(event),
+            auto_upload=True,
+        ).props("outlined").classes("w-full").mark("avsc-upload")
+
+        ui.separator()
+
+        # US-005b/FR-019 (TASK-050): alternativa ao upload — selecionar um
+        # schema já registrado no Schema Registry de uma Configuração de
+        # Ambiente, em vez de subir um novo arquivo `.avsc`.
+        ui.label("Selecionar do Schema Registry").classes("text-base font-medium")
+        with ui.row().classes("items-end gap-2"):
+            registry_config_select = environment_select.render(label="Configuração de ambiente")
+            subject_select = (
+                ui.select({}, label="Subject")
+                .props("outlined dense")
+                .classes("w-48")
+                .mark("subject-select")
+            )
+            ui.button(
+                "Usar este schema", icon="check", on_click=lambda: _use_registry_schema()
+            ).props("outline").mark("use-registry-schema-button")
+
+    with ui.card().classes("w-full gap-2") as details:
+        ui.label("Detalhes do schema").classes("text-base font-medium")
+        nome_label = ui.label().classes("text-lg font-semibold").mark("schema-nome")
+        namespace_label = ui.label().classes("text-slate-500").mark("schema-namespace")
+        ui.label("Campos").classes(
+            "text-sm font-semibold uppercase tracking-wide text-slate-400 mt-2"
+        )
+        fields_list = ui.column().mark("schema-fields").classes("gap-1")
+        ui.label("Conteúdo original").classes(
+            "text-sm font-semibold uppercase tracking-wide text-slate-400 mt-2"
+        )
+        raw_content_area = (
+            ui.textarea()
+            .mark("schema-raw-content")
+            .props("readonly outlined")
+            .classes("w-full font-mono")
+        )
+    details.visible = False
+
+    ui.label("Schemas carregados").classes("text-lg font-medium")
+    with ui.card().classes("w-full"):
+        saved_schemas_list = ui.row().mark("saved-schemas-list").classes("gap-2 flex-wrap")
 
     def _refresh_saved_schemas() -> None:
         saved_schemas_list.clear()
@@ -29,18 +76,7 @@ def schemas_avro_page() -> None:
             if not nomes:
                 ui.label("Nenhum schema carregado ainda.").classes("text-grey")
             for nome in nomes:
-                ui.badge(nome).mark(f"saved-schema-{nome}")
-
-    with ui.column().classes("gap-2 w-full") as details:
-        nome_label = ui.label().mark("schema-nome")
-        namespace_label = ui.label().mark("schema-namespace")
-        ui.label("Campos").classes("text-lg")
-        fields_list = ui.column().mark("schema-fields").classes("gap-0")
-        ui.label("Conteúdo original").classes("text-lg")
-        raw_content_area = (
-            ui.textarea().mark("schema-raw-content").props("readonly").classes("w-full")
-        )
-    details.visible = False
+                ui.badge(nome, color="secondary").mark(f"saved-schema-{nome}")
 
     def _show_schema_result(result: kafka_service.SchemaValidationResult) -> None:
         if not result.valid:
@@ -85,54 +121,38 @@ def schemas_avro_page() -> None:
         # de `POST /api/v1/schema/validate` (TASK-022), sem persistir.
         _show_schema_result(kafka_service.save_schema(content))
 
-    ui.upload(
-        label="Selecionar arquivo .avsc",
-        on_upload=_handle_upload,
-        auto_upload=True,
-    ).mark("avsc-upload").classes("w-full")
-
-    # US-005b/FR-019 (TASK-050): alternativa ao upload — selecionar um
-    # schema já registrado no Schema Registry de uma Configuração de
-    # Ambiente, em vez de subir um novo arquivo `.avsc`.
-    ui.label("Selecionar do Schema Registry").classes("text-lg")
-    with ui.row().classes("items-end gap-2"):
-        registry_config_select = environment_select.render(label="Configuração de ambiente")
-        subject_select = ui.select({}, label="Subject").mark("subject-select").classes("w-48")
-
-        def _refresh_subjects() -> None:
-            nome = registry_config_select.value
-            subject_select.options = {}
-            subject_select.value = None
-            if not nome:
-                subject_select.update()
-                return
-            try:
-                subjects = kafka_service.list_schema_registry_subjects(nome)
-            except SchemaRegistryError as error:
-                status_label.text = error.friendly_message
-                status_label.classes(replace="text-negative")
-                subject_select.update()
-                return
-            subject_select.options = {subject: subject for subject in subjects}
+    def _refresh_subjects() -> None:
+        nome = registry_config_select.value
+        subject_select.options = {}
+        subject_select.value = None
+        if not nome:
             subject_select.update()
+            return
+        try:
+            subjects = kafka_service.list_schema_registry_subjects(nome)
+        except SchemaRegistryError as error:
+            status_label.text = error.friendly_message
+            status_label.classes(replace="text-negative")
+            subject_select.update()
+            return
+        subject_select.options = {subject: subject for subject in subjects}
+        subject_select.update()
 
-        registry_config_select.on_value_change(lambda _event: _refresh_subjects())
+    registry_config_select.on_value_change(lambda _event: _refresh_subjects())
 
-        def _use_registry_schema() -> None:
-            nome = registry_config_select.value
-            subject = subject_select.value
-            if not nome or not subject:
-                status_label.text = "Selecione uma configuração e um subject."
-                status_label.classes(replace="text-negative")
-                return
-            try:
-                result = kafka_service.load_schema_from_registry(nome, subject)
-            except SchemaRegistryError as error:
-                status_label.text = error.friendly_message
-                status_label.classes(replace="text-negative")
-                return
-            _show_schema_result(result)
-
-        ui.button("Usar este schema", on_click=_use_registry_schema).mark("use-registry-schema-button")
+    def _use_registry_schema() -> None:
+        nome = registry_config_select.value
+        subject = subject_select.value
+        if not nome or not subject:
+            status_label.text = "Selecione uma configuração e um subject."
+            status_label.classes(replace="text-negative")
+            return
+        try:
+            result = kafka_service.load_schema_from_registry(nome, subject)
+        except SchemaRegistryError as error:
+            status_label.text = error.friendly_message
+            status_label.classes(replace="text-negative")
+            return
+        _show_schema_result(result)
 
     _refresh_saved_schemas()

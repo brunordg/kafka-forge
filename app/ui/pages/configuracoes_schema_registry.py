@@ -19,46 +19,56 @@ def configuracoes_schema_registry_page() -> None:
     — a Configuração de Ambiente em si continua sendo criada em
     Configurações → Kafka (TASK-014); esta tela só edita/testa o Schema
     Registry de uma configuração já cadastrada."""
-    layout.render_menu()
+    layout.render_menu(ROUTE)
 
-    ui.label("Configurações — Schema Registry").classes("text-2xl font-bold")
+    with ui.row().classes("items-center gap-2"):
+        ui.icon("schema").classes("text-primary text-3xl")
+        ui.label("Configurações — Schema Registry").classes("text-2xl font-bold")
 
     state: dict[str, str | None] = {"ca_cert": None, "client_cert": None, "client_key": None}
 
-    with ui.column().classes("w-full max-w-2xl gap-2"):
-        config_select = environment_select.render(label="Configuração de ambiente")
+    with ui.column().classes("w-full max-w-2xl gap-3"):
+        with ui.card().classes("w-full gap-2"):
+            config_select = environment_select.render(label="Configuração de ambiente")
 
-        url_input = (
-            ui.input("URL")
-            .mark("url-input")
-            .props('placeholder="http://localhost:8081"')
-            .classes("w-full")
-        )
-        username_input = ui.input("Usuário").mark("username-input").classes("w-full")
-        password_input = ui.input("Senha", password=True).mark("password-input").classes("w-full")
+            url_input = (
+                ui.input("URL")
+                .props('outlined dense placeholder="http://localhost:8081"')
+                .classes("w-full")
+                .mark("url-input")
+            )
+            username_input = (
+                ui.input("Usuário").props("outlined dense").classes("w-full").mark("username-input")
+            )
+            password_input = (
+                ui.input("Senha", password=True)
+                .props("outlined dense")
+                .classes("w-full")
+                .mark("password-input")
+            )
 
-        def _make_upload_handler(field: str, rotulo: str):
-            async def handler(event: events.UploadEventArguments) -> None:
-                state[field] = await _read_upload_as_text(event)
-                ui.notify(f"{rotulo} carregado: {event.file.name}")
+            def _make_upload_handler(field: str, rotulo: str):
+                async def handler(event: events.UploadEventArguments) -> None:
+                    state[field] = await _read_upload_as_text(event)
+                    ui.notify(f"{rotulo} carregado: {event.file.name}")
 
-            return handler
+                return handler
 
-        ui.upload(
-            label="Certificado da autoridade (CA)",
-            on_upload=_make_upload_handler("ca_cert", "Certificado CA"),
-            auto_upload=True,
-        ).mark("ca-cert-upload").classes("w-full")
-        ui.upload(
-            label="Certificado do cliente",
-            on_upload=_make_upload_handler("client_cert", "Certificado do cliente"),
-            auto_upload=True,
-        ).mark("client-cert-upload").classes("w-full")
-        ui.upload(
-            label="Chave privada do cliente",
-            on_upload=_make_upload_handler("client_key", "Chave privada do cliente"),
-            auto_upload=True,
-        ).mark("client-key-upload").classes("w-full")
+            ui.upload(
+                label="Certificado da autoridade (CA)",
+                on_upload=_make_upload_handler("ca_cert", "Certificado CA"),
+                auto_upload=True,
+            ).props("outlined").classes("w-full").mark("ca-cert-upload")
+            ui.upload(
+                label="Certificado do cliente",
+                on_upload=_make_upload_handler("client_cert", "Certificado do cliente"),
+                auto_upload=True,
+            ).props("outlined").classes("w-full").mark("client-cert-upload")
+            ui.upload(
+                label="Chave privada do cliente",
+                on_upload=_make_upload_handler("client_key", "Chave privada do cliente"),
+                auto_upload=True,
+            ).props("outlined").classes("w-full").mark("client-key-upload")
 
         status_label = ui.label().mark("status-label")
 
@@ -154,5 +164,7 @@ def configuracoes_schema_registry_page() -> None:
             status_label.classes(replace="text-positive" if result.success else "text-negative")
 
         with ui.row():
-            ui.button("Salvar", on_click=_save).mark("save-button")
-            ui.button("Testar Schema Registry", on_click=_test).mark("test-schema-registry-button")
+            ui.button("Salvar", icon="save", on_click=_save).mark("save-button")
+            ui.button(
+                "Testar Schema Registry", icon="wifi_tethering", on_click=_test
+            ).props("outline").mark("test-schema-registry-button")
