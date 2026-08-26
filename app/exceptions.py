@@ -32,6 +32,15 @@ class SchemaRegistryError(KafkaForgeError):
     pass
 
 
+class SchemaNotRegisteredError(SchemaRegistryError):
+    """O schema consultado não existe no Schema Registry sob aquele subject
+    — diferente de uma falha de conexão/autenticação: é um resultado normal
+    de uma consulta somente leitura, não um erro de infraestrutura. Tratada
+    separadamente por `kafka_service.publish()` para permitir publicar com
+    o schema usado apenas para validação local, sem exigir que ele já
+    esteja registrado."""
+
+
 class AvroSchemaError(KafkaForgeError):
     """Falha de estrutura de um schema Avro carregado via `.avsc` (US-002a,
     FR-009): JSON sintaticamente válido, mas semanticamente inválido como

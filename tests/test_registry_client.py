@@ -1,9 +1,10 @@
 from pathlib import Path
 
 import pytest
+from confluent_kafka.schema_registry import SchemaRegistryError as ConfluentSchemaRegistryError
 
 from app.config.models import SchemaRegistryConfig
-from app.exceptions import SchemaRegistryError
+from app.exceptions import SchemaNotRegisteredError, SchemaRegistryError
 from app.registry import client as registry_client
 
 
@@ -14,6 +15,11 @@ class _FakeRegisteredSchema:
                 self.schema_str = schema_str
 
         self.schema = _Schema(schema_str)
+
+
+class _FakeLookedUpSchema:
+    def __init__(self, schema_id: int):
+        self.schema_id = schema_id
 
 
 class _FakeSchemaRegistryClient:
@@ -37,8 +43,20 @@ class _FakeSchemaRegistryClient:
     def get_version(self, subject_name, version="latest"):
         return _FakeRegisteredSchema('{"type": "record", "name": "Pedido", "fields": []}')
 
-    def register_schema(self, subject_name, schema):
-        return 42
+    def lookup_schema(self, subject_name, schema):
+        return _FakeLookedUpSchema(42)
+
+
+class _NotRegisteredSchemaRegistryClient:
+    """Simula o 404 que a Confluent devolve quando o schema consultado
+    ainda não está registrado sob o subject — `lookup_schema` nunca cria
+    nada, só consulta."""
+
+    def __init__(self, conf: dict):
+        pass
+
+    def lookup_schema(self, subject_name, schema):
+        raise ConfluentSchemaRegistryError(404, 40403, "Schema not found")
 
 
 class _FailingSchemaRegistryClient:
@@ -88,14 +106,28 @@ def test_get_schema_returns_the_avsc_content(monkeypatch):
     assert '"name": "Pedido"' in content
 
 
-def test_register_or_reuse_schema_returns_the_schema_id(monkeypatch):
+def test_lookup_schema_id_returns_the_existing_schema_id(monkeypatch):
     monkeypatch.setattr(registry_client, "SchemaRegistryClient", _FakeSchemaRegistryClient)
 
-    schema_id = registry_client.register_or_reuse_schema(
+    schema_id = registry_client.lookup_schema_id(
         _config(), "Pedido", '{"type": "record", "name": "Pedido", "fields": []}'
     )
 
     assert schema_id == 42
+
+
+def test_lookup_schema_id_raises_schema_not_registered_for_a_404(monkeypatch):
+    # distinto de uma falha genérica: `kafka_service.publish()` trata esse
+    # caso separadamente (schema local usado só para validação, sem
+    # bloquear a publicação) — nunca cria uma versão nova no registry
+    monkeypatch.setattr(registry_client, "SchemaRegistryClient", _NotRegisteredSchemaRegistryClient)
+
+    with pytest.raises(SchemaNotRegisteredError) as exc_info:
+        registry_client.lookup_schema_id(
+            _config(), "Pedido", '{"type": "record", "name": "Pedido", "fields": []}'
+        )
+
+    assert "não está registrado" in exc_info.value.friendly_message
 
 
 def test_basic_auth_is_configured_from_username_and_password(monkeypatch):

@@ -13,6 +13,7 @@ from app.exceptions import (
     ConfigurationAlreadyExistsError,
     ConfigurationNotFoundError,
     SchemaNotFoundError,
+    SchemaNotRegisteredError,
     SchemaRegistryError,
 )
 from app.services import kafka_service, operation_log
@@ -441,6 +442,65 @@ def test_publish_works_without_a_schema_registry_using_only_the_local_avsc(monke
 
     assert result.success is True
     assert producer.produce_calls[0]["topic"] == "pedido-criado"
+
+
+def test_publish_with_a_schema_registry_uses_the_id_from_an_existing_schema(monkeypatch):
+    # o KafkaForge nunca registra um schema novo: publicar com um Schema
+    # Registry configurado só reaproveita um schema já existente
+    config_manager.create_configuration(_configuration_with_schema_registry("Desenvolvimento"))
+    producer = _FakeProducer()
+    _patch_producer(monkeypatch, producer)
+    monkeypatch.setattr(
+        kafka_service.registry_client, "lookup_schema_id", lambda config, subject, avsc: 42
+    )
+
+    result = kafka_service.publish("Desenvolvimento", "pedido-criado", _PAYLOAD_SCHEMA, {"id": 1, "valor": 10.5})
+
+    assert result.success is True
+    assert producer.produce_calls[0]["topic"] == "pedido-criado"
+
+
+def test_publish_succeeds_using_a_local_schema_not_registered_in_the_schema_registry(monkeypatch):
+    # achado do usuário: um schema local ainda não registrado no Schema
+    # Registry continua servindo para validar o payload — não deve
+    # bloquear a publicação, só publicar sem o id do Schema Registry
+    config_manager.create_configuration(_configuration_with_schema_registry("Desenvolvimento"))
+    producer = _FakeProducer()
+    _patch_producer(monkeypatch, producer)
+
+    def _raise_not_registered(config, subject, avsc):
+        raise SchemaNotRegisteredError("O schema 'Pedido' ainda não está registrado no Schema Registry.")
+
+    monkeypatch.setattr(kafka_service.registry_client, "lookup_schema_id", _raise_not_registered)
+
+    result = kafka_service.publish("Desenvolvimento", "pedido-criado", _PAYLOAD_SCHEMA, {"id": 1, "valor": 10.5})
+
+    assert result.success is True
+    assert producer.produce_calls[0]["topic"] == "pedido-criado"
+    assert "usado só para validação local" in result.message
+
+
+def test_publish_blocks_on_a_genuine_schema_registry_failure(monkeypatch):
+    # diferente de "schema não registrado" (recuperável): uma falha real de
+    # conexão/autenticação com o Schema Registry ainda bloqueia a
+    # publicação — o producer nunca chega a ser usado
+    config_manager.create_configuration(_configuration_with_schema_registry("Desenvolvimento"))
+    build_producer_calls = []
+    monkeypatch.setattr(
+        kafka_service.kafka_connection,
+        "build_producer",
+        lambda configuration: build_producer_calls.append(configuration),
+    )
+
+    def _raise_connection_error(config, subject, avsc):
+        raise SchemaRegistryError("Não foi possível confirmar o schema no Schema Registry.")
+
+    monkeypatch.setattr(kafka_service.registry_client, "lookup_schema_id", _raise_connection_error)
+
+    result = kafka_service.publish("Desenvolvimento", "pedido-criado", _PAYLOAD_SCHEMA, {"id": 1, "valor": 10.5})
+
+    assert result.success is False
+    assert build_producer_calls == []
 
 
 def test_publish_without_a_schema_publishes_the_payload_as_plain_json(monkeypatch):

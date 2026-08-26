@@ -3,9 +3,10 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from confluent_kafka.schema_registry import Schema, SchemaRegistryClient
+from confluent_kafka.schema_registry import SchemaRegistryError as ConfluentSchemaRegistryError
 
 from app.config.models import SchemaRegistryConfig
-from app.exceptions import SchemaRegistryError
+from app.exceptions import SchemaNotRegisteredError, SchemaRegistryError
 
 # Decisão Q2 (seção 7 do plano): 10 segundos — mesmo timeout usado para
 # testar a conexão Kafka e para publicar.
@@ -111,17 +112,26 @@ def get_schema(config: SchemaRegistryConfig, subject: str, version: int | str = 
         ) from error
 
 
-def register_or_reuse_schema(config: SchemaRegistryConfig, subject: str, avsc_content: str) -> int:
-    """Registra `avsc_content` no `subject` informado e retorna o schema id
-    (US-005b, TASK-048). `register_schema` da Confluent já é idempotente
-    para um schema idêntico a uma versão já registrada — devolve o id
-    existente em vez de criar uma versão nova (FR-015/SC-008, edge case da
-    spec) —, então não há necessidade de comparação manual de conteúdo
-    aqui."""
+def lookup_schema_id(config: SchemaRegistryConfig, subject: str, avsc_content: str) -> int:
+    """Confirma que `avsc_content` já está registrado no `subject` informado
+    e devolve o schema id existente — somente leitura. O KafkaForge nunca
+    registra um schema novo no Schema Registry: `lookup_schema` da Confluent
+    é um `POST /subjects/{subject}` (a API de "isso já existe?"), diferente
+    de `register_schema` (`POST /subjects/{subject}/versions`, que cria uma
+    versão nova quando o conteúdo não bate com nenhuma já registrada)."""
     try:
         with _client(config) as client:
-            return client.register_schema(subject, Schema(avsc_content, schema_type="AVRO"))
+            return client.lookup_schema(subject, Schema(avsc_content, schema_type="AVRO")).schema_id
+    except ConfluentSchemaRegistryError as error:
+        if error.http_status_code == 404:
+            raise SchemaNotRegisteredError(
+                f"O schema '{subject}' ainda não está registrado no Schema Registry.",
+                str(error),
+            ) from error
+        raise SchemaRegistryError(
+            f"Não foi possível confirmar o schema '{subject}' no Schema Registry.", str(error)
+        ) from error
     except Exception as error:
         raise SchemaRegistryError(
-            f"Não foi possível registrar o schema no subject '{subject}'.", str(error)
+            f"Não foi possível confirmar o schema '{subject}' no Schema Registry.", str(error)
         ) from error

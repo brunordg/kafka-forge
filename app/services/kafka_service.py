@@ -13,6 +13,7 @@ from app.exceptions import (
     KafkaAuthenticationError,
     MessagePublishError,
     MessageSerializationError,
+    SchemaNotRegisteredError,
     SchemaRegistryError,
 )
 from app.kafka import connection as kafka_connection
@@ -522,6 +523,7 @@ def publish(
 
     loaded_schema = None
     schema_id = None
+    schema_registry_skipped = False
     serialized: bytes
 
     if schema_avsc:
@@ -544,14 +546,20 @@ def publish(
             )
 
         if configuration.schema_registry is not None:
-            # FR-015/TASK-049: usa o schema id do Schema Registry na
-            # serialização quando configurado — `register_or_reuse_schema`
-            # já reaproveita o id existente para um schema idêntico
-            # (SC-008), nunca criando uma versão duplicada.
+            # O KafkaForge nunca registra um schema novo no Schema
+            # Registry: `lookup_schema_id` é somente leitura — confirma que
+            # este schema já existe (por conteúdo idêntico) sob o subject e
+            # devolve o id existente. Um schema ainda não registrado não
+            # bloqueia a publicação: o schema local continua servindo só
+            # para validar o payload (achado do usuário), e a mensagem é
+            # publicada sem o id do Schema Registry — só uma falha real de
+            # conexão/autenticação com o Schema Registry bloqueia aqui.
             try:
-                schema_id = registry_client.register_or_reuse_schema(
+                schema_id = registry_client.lookup_schema_id(
                     configuration.schema_registry, loaded_schema.nome, schema_avsc
                 )
+            except SchemaNotRegisteredError:
+                schema_registry_skipped = True
             except SchemaRegistryError as error:
                 return _failure(
                     error.friendly_message,
@@ -587,11 +595,18 @@ def publish(
         message, technical_detail = _describe_kafka_error(error.args[0])
         return _failure(message, schema_nome=schema_nome, technical_detail=technical_detail)
 
+    message = "Mensagem publicada com sucesso."
+    if schema_registry_skipped:
+        message += (
+            f" Schema '{schema_nome}' usado só para validação local — ainda não está "
+            "registrado no Schema Registry."
+        )
+
     return _record_publish(
         nome_configuracao,
         started_at,
         success=True,
-        message="Mensagem publicada com sucesso.",
+        message=message,
         topic=topic,
         schema_nome=schema_nome,
         partition=partition,

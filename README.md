@@ -172,6 +172,13 @@ O Schema Registry é opcional: um ambiente sem ele configurado continua
 publicando normalmente, serializando diretamente a partir do `.avsc`
 carregado (sem exigir Schema Registry).
 
+Publicar também nunca registra um schema novo no Schema Registry: se o
+schema usado já existir lá (por conteúdo idêntico sob o subject), a
+mensagem é publicada com o id do Schema Registry; se ainda não existir, a
+publicação não é bloqueada — o schema local continua servindo só para
+validar o payload, e a mensagem é publicada sem vínculo com o Schema
+Registry (o status da tela deixa isso explícito).
+
 ## 10. Como carregar um `.avsc`
 
 Na tela **Schemas Avro** (`/schemas/avro`), faça upload de um arquivo
